@@ -2,8 +2,18 @@ const express = require('express');
 const { createServer } = require('node:http');
 const { join } = require('node:path');
 const { Server } = require('socket.io');
-const rooms = require('./EXAMPLE_DATA/room.json')
 
+const rooms = require('./EXAMPLE_DATA/room.json')
+const listRooms = {
+    "1": {
+        activeUsers: new Set(),
+        waitingQueue: [],
+    },
+    "2": {
+        activeUsers: new Set(),
+        waitingQueue: [],
+    }
+};
 
 const app = express();
 const server = createServer(app);
@@ -19,7 +29,6 @@ app.get('/rooms', (req, res) => {
     res.json(rooms)
 })
 
-
 app.get('/rooms/:id', (req, res) => {
     res.json(rooms.find(room => room.id === req.params.id))
 })
@@ -33,50 +42,57 @@ io.on('connection', (socket) => {
     console.log(`User ${socket.id} connected`);
 
     // Handle queue admission
-    function inUsing(socketToUsing) {
-        activeUsers.add(socketToUsing.id);
-        socketToUsing.emit('in_using', { number: activeUsers.size });
-        io.emit('update_status', {
-            active: Array.from(activeUsers),
-            queue: waitingQueue.map(s => s.id)
-        });
+    function handleInActive(roomState, socketToUsing) {
+        roomState.activeUsers.add(socketToUsing.id);
+        socketToUsing.emit('in_active', { number: roomState.activeUsers.size });
     }
 
     // Handle queue admission
-    function inQueue(socketToQueue) {
-        waitingQueue.push(socketToQueue);
-        socketToQueue.emit('in_queue', { number: waitingQueue.length });
-        io.emit('update_status', {
-            active: Array.from(activeUsers),
-            queue: waitingQueue.map(s => s.id),
-        });
+    function handleInQueue(roomState, socketToQueue) {
+        roomState.waitingQueue.push(socketToQueue);
+        socketToQueue.emit('in_queue', { number: roomState.waitingQueue.length });
     }
 
-    if (activeUsers.size < MAX_ACTIVE_USERS) { // less than Max_accessing
-        inUsing(socket);
-    } else {
-        inQueue(socket)
-    }
+    socket.on('select_room', ({ room }) => {
+        socket.data.room = room;
+        const roomState = listRooms[room];
+        if (!roomState) return;
 
-    // Handle disconnect
-    socket.on('disconnect', () => {
-        console.log(`User ${socket.id} disconnected`);
-
-        activeUsers.delete(socket.id);
-
-        // Remove from waiting queue (if they disconnected before entry)
-        const index = waitingQueue.findIndex(s => s.id === socket.id);
-        if (index !== -1) waitingQueue.splice(index, 1);
-
-        // Promote next user in queue
-        if (waitingQueue.length > 0 && activeUsers.size < MAX_ACTIVE_USERS) {
-            const nextSocket = waitingQueue.shift();
-            inUsing(nextSocket);
+        if (roomState.activeUsers.size < MAX_ACTIVE_USERS) {
+            handleInActive(roomState, socket)
+        } else {
+            handleInQueue(roomState, socket)
         }
 
         io.emit('update_status', {
-            active: Array.from(activeUsers),
-            queue: waitingQueue.map(s => s.id)
+            room: room,
+            active: Array.from(roomState.activeUsers),
+            queue: roomState.waitingQueue.map(s => s.id)
+        });
+    });
+
+    socket.on('disconnect', () => {
+        const room = socket.data.room;
+
+        if (!room || !listRooms[room]) return;
+
+        const roomState = listRooms[room];
+
+        roomState.activeUsers.delete(socket.id);
+        const index = roomState.waitingQueue.findIndex(s => s.id === socket.id);
+        if (index !== -1) roomState.waitingQueue.splice(index, 1);
+
+        // Promote next in queue
+        if (roomState.waitingQueue.length > 0 && roomState.activeUsers.size < MAX_ACTIVE_USERS) {
+            const nextSocket = roomState.waitingQueue.shift();
+            roomState.activeUsers.add(nextSocket.id);
+            nextSocket.emit('in_active', { number: roomState.activeUsers.size });
+        }
+
+        io.emit('update_status', {
+            room: room,
+            active: Array.from(roomState.activeUsers),
+            queue: roomState.waitingQueue.map(s => s.id)
         });
     });
 });
