@@ -13,56 +13,63 @@ app.get('/', (req, res) => {
     res.sendFile(join(__dirname, 'index.html'));
 });
 
-const ipConnections = {};
+const MAX_ACTIVE_USERS = 5;
+const activeUsers = new Set(); // Connected and allowed
+const waitingQueue = []; // Queued sockets
+
 
 io.on('connection', (socket) => {
-    const ip = socket.handshake.address;
-    ipConnections[ip] = (ipConnections[ip] || 0) + 1;
+    console.log(`User ${socket.id} connected`);
 
-    console.log('a user connected');
-
-    // // send msg to frontend when some user disconnect
-    // socket.on('disconnect', () => {
-    //     console.log('user disconnected');
-    //     io.to('some room').emit('chat message', '*disconnect*'); 
-    // });
-    socket.on('disconnect', () => {
-        ipConnections[ip] -= 1;
-        if (ipConnections[ip] === 0) {
-            delete ipConnections[ip];
-        }
-        // console.log(`Disconnected: ${ip}. Remaining: ${ipConnections[ip] || 0}`);
-        console.log(`Remaining: ${ipConnections[ip] || 0}`);
-    });
-
-    // send msg to frontend
-    socket.on('chat message', (msg) => {
-        io.emit('chat message', msg); 
-    });
-
-    console.log(`New connection from ${ip}. Total: ${ipConnections[ip]}`);
-
-    // Disconnect if too many connections from the same IP
-    if (ipConnections[ip] > 3) {
-        socket.emit('chat message', 'Too many connections from your IP');
-        socket.disconnect(true);
-        return;
+    // Handle queue admission
+    function inUsing(socketToUsing) {
+        activeUsers.add(socketToUsing.id);
+        socketToUsing.emit('in_using', { number: activeUsers.size });
+        io.emit('update_status', {
+            active: Array.from(activeUsers),
+            queue: waitingQueue.map(s => s.id)
+        });
     }
 
-    // **For show msg when new user access** //
-    // join the room named 'some room'
-    socket.join('some room');
+    // Handle queue admission
+    function inQueue(socketToQueue) {
+        waitingQueue.push(socketToQueue);
+        socketToQueue.emit('in_queue', { number: waitingQueue.length });
+        io.emit('update_status', {
+            active: Array.from(activeUsers),
+            queue: waitingQueue.map(s => s.id),
+        });
+    }
 
-    // broadcast to all connected clients in the room
-    io.to('some room').emit('chat message', 'Welcome to join room');
+    if (activeUsers.size < MAX_ACTIVE_USERS) { // less than Max_accessing
+        inUsing(socket);
+    } else {
+        inQueue(socket)
+    }
 
-    // broadcast to all connected clients except those in the room
-    io.except('some room').emit('chat message', `user number: ${ipConnections[ip]} in caht`);
+    // Handle disconnect
+    socket.on('disconnect', () => {
+        console.log(`User ${socket.id} disconnected`);
 
-    // leave the room
-    socket.leave('some room')
+        activeUsers.delete(socket.id);
+
+        // Remove from waiting queue (if they disconnected before entry)
+        const index = waitingQueue.findIndex(s => s.id === socket.id);
+        if (index !== -1) waitingQueue.splice(index, 1);
+
+        // Promote next user in queue
+        if (waitingQueue.length > 0 && activeUsers.size < MAX_ACTIVE_USERS) {
+            const nextSocket = waitingQueue.shift();
+            inUsing(nextSocket);
+        }
+
+        io.emit('update_status', {
+            active: Array.from(activeUsers),
+            queue: waitingQueue.map(s => s.id)
+        });
+    });
 });
 
 server.listen(3000, () => {
-    console.log('server running at http://localhost:3000');
+    console.log('Server running on http://localhost:3000');
 });

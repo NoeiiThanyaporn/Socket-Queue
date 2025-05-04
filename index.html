@@ -1,65 +1,107 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>Socket.IO chat</title>
-    <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Socket.IO Queue</title>
+  <style>
+    body {
+      margin: 0;
+      padding-bottom: 3rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
 
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
-    </style>
-  </head>
-  <body>
-    <ul id="messages"></ul>
-    <form id="form" action="">
-      <input id="input" autocomplete="off" /><button>Send</button>
-      <button id="toggle-btn">Disconnect</button>
-    </form>
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-      const socket = io();
-    
-      const form = document.getElementById('form');
-      const input = document.getElementById('input');
+    #messages {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    #messages>li {
+      padding: 0.5rem 1rem;
+    }
+
+    #messages>li:nth-child(odd) {
+      background: #efefef;
+    }
+  </style>
+</head>
+
+<body>
+  <ul id="messages"></ul>
+  <form id="form" action="">
+    <button id="toggle-btn">Submit / Leave</button>
+  </form>
+  <div id="live-stats">
+    <p><strong>Using:</strong> <span id="using-count">0</span></p>
+    <p><strong>Queue:</strong> <span id="queue-count">0</span></p>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const toggleButton = document.getElementById('toggle-btn');
+
+    socket.on('in_using', (data) => {
       const messages = document.getElementById('messages');
-      const toggleButton = document.getElementById('toggle-btn');
+      const container = document.createElement('li');
 
+      messages.innerHTML = '';
+      const status = document.createElement('div');
+      status.textContent = "✅ You can use the site";
+      status.style.fontSize = "1.5rem";
 
-    //   Text box
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        if (input.value) {
-          socket.emit('chat message', input.value);
-          input.value = '';
-        }
-      });
-      
-    //   Button connet-disconnect
-      toggleButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (socket.connected) {
-          toggleButton.innerText = 'Connect';
-          socket.disconnect();
-        } else {
-          toggleButton.innerText = 'Disconnect';
-          socket.connect();
-        }
+      const subtext = document.createElement('div');
+      subtext.textContent = `Total accessed: ${data.number} / 5`;
+      subtext.style.fontSize = "0.9rem";
+
+      container.appendChild(status);
+      container.appendChild(subtext);
+      messages.appendChild(container);
     });
-      
-    socket.on('chat message', (msg) => {
-        const item = document.createElement('li');
-        item.textContent = msg;
-        messages.appendChild(item);
-        window.scrollTo(0, document.body.scrollHeight);
-      });
 
-    </script>
-  </body>
+    socket.on('in_queue', (data) => {
+      const messages = document.getElementById('messages');
+      const container = document.createElement('li');
+      messages.innerHTML = '';
+
+      const status = document.createElement('div');
+      status.textContent = "⏳ Waiting queue";
+      status.style.fontSize = "1.5rem";
+
+      const subtext = document.createElement('div');
+      subtext.textContent = `Position in queue: ${data.number}`;
+      subtext.style.fontSize = "0.9rem";
+      subtext.style.color = "#555";
+
+      container.appendChild(status);
+      container.appendChild(subtext);
+      messages.appendChild(container);
+    });
+
+
+    // Button connet-disconnect
+    toggleButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (socket.connected) {
+        toggleButton.innerText = 'Entry';
+        socket.disconnect();
+      } else {
+        toggleButton.innerText = 'Submit / Leave';
+        socket.connect();
+      }
+    });
+
+    socket.on('update_status', (data) => {
+      console.log("Active:", data.active, data.active.length);
+      console.log("Queue:", data.queue, data.queue.length);
+
+      document.getElementById('using-count').textContent = data.active.length;
+      document.getElementById('queue-count').textContent = data.queue.length;
+    });
+
+  </script>
+</body>
+
 </html>
