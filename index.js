@@ -3,6 +3,7 @@ const { createServer } = require('node:http');
 const { join } = require('node:path');
 const { Server } = require('socket.io');
 
+const PORT = 3000
 const rooms = require('./EXAMPLE_DATA/room.json')
 const listRooms = {
     "1": {
@@ -36,8 +37,6 @@ app.get('/rooms/:id', (req, res) => {
 const MAX_ACTIVE_USERS = 5;
 
 io.on('connection', (socket) => {
-    console.log(`User ${socket.id} connected`);
-
     // Handle queue admission
     function handleInActive(roomState, socketToUsing) {
         roomState.activeUsers.add(socketToUsing.id);
@@ -94,6 +93,6 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => {
-    console.log('Server running on http://localhost:3000');
+server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
