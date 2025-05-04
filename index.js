@@ -34,9 +34,6 @@ app.get('/rooms/:id', (req, res) => {
 })
 
 const MAX_ACTIVE_USERS = 5;
-const activeUsers = new Set(); // Connected and allowed
-const waitingQueue = []; // Queued sockets
-
 
 io.on('connection', (socket) => {
     console.log(`User ${socket.id} connected`);
