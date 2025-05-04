@@ -2,6 +2,8 @@ const express = require('express');
 const { createServer } = require('node:http');
 const { join } = require('node:path');
 const { Server } = require('socket.io');
+const rooms = require('./EXAMPLE_DATA/room.json')
+
 
 const app = express();
 const server = createServer(app);
@@ -12,6 +14,15 @@ const io = new Server(server, {
 app.get('/', (req, res) => {
     res.sendFile(join(__dirname, 'index.html'));
 });
+
+app.get('/rooms', (req, res) => {
+    res.json(rooms)
+})
+
+
+app.get('/rooms/:id', (req, res) => {
+    res.json(rooms.find(room => room.id === req.params.id))
+})
 
 const MAX_ACTIVE_USERS = 5;
 const activeUsers = new Set(); // Connected and allowed
