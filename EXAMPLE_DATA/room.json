@@ -1,0 +1,16 @@
+[
+    {
+        "id": "1",
+        "roomNumber": "room-1",
+        "amount": 5,
+        "isAvaliabled": true,
+        "details": "some details of room-1"
+    },
+    {
+        "id": "2",
+        "roomNumber": "room-2",
+        "amount": 5,
+        "isAvaliabled": true,
+        "details": "some details of room-2"
+    }
+]

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Socket.IO Queue</title>
+  <style>
+    body {
+      margin: 0;
+      padding-bottom: 3rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    #messages {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    #messages>li {
+      padding: 0.5rem 1rem;
+    }
+
+    #messages>li:nth-child(odd) {
+      background: #efefef;
+    }
+  </style>
+</head>
+
+<body>
+  <ul id="messages"></ul>
+  <form id="select-room" action="">
+    <button id="select-room-A">Room A</button>
+    <button id="select-room-B">Room B</button>
+  </form>
+  <form id="form" action="">
+    <button id="submit-btn">Submit / Leave</button>
+  </form>
+  <div id="live-stats-a" style="display: none;">
+    <p><strong>Using:</strong> <span id="active-count-a">0</span></p>
+    <p><strong>Queue:</strong> <span id="queue-count-a">0</span></p>
+  </div>
+  <div id="live-stats-b" style="display: none;">
+    <p><strong>Using:</strong> <span id="active-count-b">0</span></p>
+    <p><strong>Queue:</strong> <span id="queue-count-b">0</span></p>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const selectRoomA = document.getElementById('select-room-A');
+    const selectRoomB = document.getElementById('select-room-B');
+    const submitButton = document.getElementById('submit-btn');
+
+    let selectedRoom = null;
+
+    socket.on('in_active', (data) => {
+      const messages = document.getElementById('messages');
+      const container = document.createElement('li');
+
+      messages.innerHTML = '';
+      const status = document.createElement('div');
+      status.textContent = `✅ You can active in Room ${selectedRoom}`;
+      status.style.fontSize = "1.5rem";
+
+
+      container.appendChild(status);
+      messages.appendChild(container);
+    });
+
+    socket.on('in_queue', (data) => {
+      const messages = document.getElementById('messages');
+      const container = document.createElement('li');
+      messages.innerHTML = '';
+
+      const status = document.createElement('div');
+      status.textContent = `⏳ Waiting queue in Room ${selectedRoom}`;
+      status.style.fontSize = "1.5rem";
+
+
+      container.appendChild(status);
+      messages.appendChild(container);
+    });
+
+    // Button connet-disconnect
+    submitButton.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      if (socket.connected) {
+        submitButton.innerText = 'Entry';
+        socket.disconnect();
+
+        // Reset state
+        selectedRoom = null;
+        document.getElementById('messages').innerHTML = '';
+        document.getElementById('select-room').style.display = 'none';
+        document.getElementById('live-stats-a').style.display = 'none';
+        document.getElementById('live-stats-b').style.display = 'none';
+      } else {
+        submitButton.innerText = 'Submit / Leave';
+        socket.connect();
+        document.getElementById('select-room').style.display = 'block';
+      }
+    });
+
+    // Room A
+    selectRoomA.addEventListener('click', (e) => {
+      e.preventDefault();
+      selectedRoom = 'A';
+      socket.emit('select_room', { room: '1' });
+
+      document.getElementById('select-room').style.display = 'none';
+      submitButton.style.display = 'block';
+
+      // Show only Room A stats
+      document.getElementById('live-stats-a').style.display = 'block';
+      document.getElementById('live-stats-b').style.display = 'none';
+    });
+
+    // Room B
+    selectRoomB.addEventListener('click', (e) => {
+      e.preventDefault();
+      selectedRoom = 'B';
+      socket.emit('select_room', { room: '2' });
+
+      document.getElementById('select-room').style.display = 'none';
+      submitButton.style.display = 'block';
+
+      // Show only Room B stats
+      document.getElementById('live-stats-b').style.display = 'block';
+      document.getElementById('live-stats-a').style.display = 'none';
+    });
+
+
+    socket.on('update_status', (data) => {
+      console.log(data.room,data.active,data.queue)
+      if (data.room == '1') {
+        document.getElementById('active-count-a').textContent = data.active.length;
+        document.getElementById('queue-count-a').textContent = data.queue.length;
+      } else {
+        document.getElementById('active-count-b').textContent = data.active.length;
+        document.getElementById('queue-count-b').textContent = data.queue.length;
+      }
+    });
+
+  </script>
+</body>
+
+</html>
